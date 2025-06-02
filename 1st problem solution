@@ -1,0 +1,115 @@
+#include <iostream>
+#include<bits/stdc++.h>
+#include <unordered_map>
+using namespace std;
+
+// -first i was create  Node structure of a Doubly Linked List ----------
+class Node {
+public:
+    int key;
+    int value;
+    Node* prev;
+    Node* next;
+
+    // Constructor or called one time function at create time
+    Node(int k, int v) {
+        key = k;
+        value = v;
+        prev = nullptr;
+        next = nullptr;
+    }
+};
+
+//  -this is  my main class LRU Cache according to given problem  ----------
+class LRUCache {
+private:
+    int capacity; // varibale that is represent max size of the cache
+    unordered_map<int, Node*> cacheMap; // i'm create a map that is stores key -> Node*
+    Node* head; // dummy head or most recent
+    Node* tail; // dummy tail or least recent
+
+    // Helper: Add a new node right after head
+    void addToFront(Node* node) {
+        node->next = head->next;
+        node->prev = head;
+
+        head->next->prev = node;
+        head->next = node;
+    }
+
+    // Helper: Remove a node from the list
+    void removeNode(Node* node) {
+        Node* before = node->prev;
+        Node* after = node->next;
+        before->next = after;
+        after->prev = before;
+    }
+
+    // Helper: Move a node to the front (most recently used)
+    void moveToFront(Node* node) {
+        removeNode(node);
+        addToFront(node);
+    }
+
+    // Helper: Remove the last node (least recently used)
+    Node* removeLeastUsed() {
+        Node* lru = tail->prev;
+        removeNode(lru);
+        return lru;
+    }
+
+public:
+    // Constructor: initializes cache with given capacity
+    LRUCache(int cap) {
+        capacity = cap;
+
+        // Create dummy head and tail to avoid null checks
+        head = new Node(0, 0);
+        tail = new Node(0, 0);
+
+        head->next = tail;
+        tail->prev = head;
+    }
+
+    // Destructor: free memory to avoid leaks
+    ~LRUCache() {
+        Node* current = head;
+        while (current != nullptr) {
+            Node* temp = current;
+            current = current->next;
+            delete temp;
+        }
+    }
+
+    // Get value from cache by key
+    int get(int key) {
+        if (cacheMap.find(key) != cacheMap.end()) {
+            Node* node = cacheMap[key];
+            moveToFront(node); // since it was just used
+            return node->value;
+        }
+        return -1; // key not found
+    }
+
+    // Put key-value into cache
+    void put(int key, int value) {
+        // If key already exists, update and move to front
+        if (cacheMap.find(key) != cacheMap.end()) {
+            Node* node = cacheMap[key];
+            node->value = value;
+            moveToFront(node);
+        } else {
+            // If capacity is full, remove least recently used
+            if (cacheMap.size() == capacity) {
+                Node* lru = removeLeastUsed();
+                cacheMap.erase(lru->key);
+                delete lru;
+            }
+
+            // Create new node and add to front
+            Node* newNode = new Node(key, value);
+            cacheMap[key] = newNode;
+            addToFront(newNode);
+        }
+    }
+};
