@@ -1,0 +1,236 @@
+//Book Review App Overview
+//this is my  built simple app that is having following feacture :
+
+//Shows a list of books (from fake/mock data).
+//users view details of a selected book.
+//Lets users “favorite” a book.
+//Saves favorite books locally (Room database).
+
+//Shows favorites offline.
+
+// Architecture: MVVM (Model - View - ViewModel)
+//We’ll split our app into 3 parts:
+
+//Model: Data part (Book model, Retrofit service, Room DB).
+//ViewModel: Connects UI and data. Handles logic.
+//View (Activity/Fragment): UI that users see.
+
+//Tjis is my complete work flow or sructure of my project ir given problem statement
+//com.bookreviewapp
+//│
+//├── model
+//│   ├── Book.java
+//│   ├── BookDao.java
+//│   ├── BookDatabase.java
+//│   └── BookApiService.java
+//│
+//├── repository
+//│   └── BookRepository.java
+//│
+//├── viewmodel
+//│   └── BookViewModel.java
+//│
+//├── view
+//│   ├── MainActivity.java        ← Book list
+//│   └── BookDetailActivity.java ← Book detail
+//│
+//└── utils
+//  └── BookDummyData.json      ← Fake book list
+
+
+
+// 1- this is my main model book.java model
+public class Book {
+    private int id;
+    private String title;
+    private String author;
+    private String description;
+    private float rating;
+    private String imageUrl;
+
+    // Getters and Setters
+}
+
+
+// 2- this is my BookDao.java  or Room DAO
+@Dao
+public interface BookDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    void insert(Book book);
+
+    @Delete
+    void delete(Book book);
+
+    @Query("SELECT * FROM Book")
+    LiveData<List<Book>> getAllFavorites();
+}
+
+// 3 -this is my BookDatabase.java
+@Database(entities = {Book.class}, version = 1)
+public abstract class BookDatabase extends RoomDatabase {
+    private static volatile BookDatabase INSTANCE;
+
+    public abstract BookDao bookDao();
+
+    public static BookDatabase getInstance(Context context) {
+        if (INSTANCE == null) {
+            INSTANCE = Room.databaseBuilder(
+                context.getApplicationContext(),
+                BookDatabase.class,
+                "book_db"
+            ).build();
+        }
+        return INSTANCE;
+    }
+}
+
+
+
+
+//  4 -this is my  BookApiService.java that is Mock API with Retrofit step 4
+public interface BookApiService {
+    @GET("books.json") // assuming books.json is in local assets or mock server
+    Call<List<Book>> getBooks();
+}
+
+
+//  5th --this is my BookRepository.java
+public class BookRepository {
+    private BookApiService apiService;
+    private BookDao bookDao;
+
+    public BookRepository(BookApiService service, BookDao dao) {
+        this.apiService = service;
+        this.bookDao = dao;
+    }
+
+    public LiveData<List<Book>> getBooks() {
+        MutableLiveData<List<Book>> books = new MutableLiveData<>();
+        apiService.getBooks().enqueue(new Callback<List<Book>>() {
+            @Override
+            public void onResponse(Call<List<Book>> call, Response<List<Book>> response) {
+                if (response.isSuccessful()) {
+                    books.setValue(response.body());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<Book>> call, Throwable t) {
+                books.setValue(null); // or empty
+            }
+        });
+        return books;
+    }
+
+    public LiveData<List<Book>> getFavoriteBooks() {
+        return bookDao.getAllFavorites();
+    }
+
+    public void addToFavorites(Book book) {
+        Executors.newSingleThreadExecutor().execute(() -> bookDao.insert(book));
+    }
+
+    public void removeFromFavorites(Book book) {
+        Executors.newSingleThreadExecutor().execute(() -> bookDao.delete(book));
+    }
+}
+
+
+//  6th-- this is my view of model that is B BookViewModel.java
+public class BookViewModel extends ViewModel {
+    private BookRepository repository;
+    private LiveData<List<Book>> bookList;
+    private LiveData<List<Book>> favoriteList;
+
+    public BookViewModel(Application app) {
+        BookDatabase db = BookDatabase.getInstance(app);
+        BookApiService apiService = new Retrofit.Builder()
+                .baseUrl("https://your-mock-api/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+                .create(BookApiService.class);
+
+        repository = new BookRepository(apiService, db.bookDao());
+        bookList = repository.getBooks();
+        favoriteList = repository.getFavoriteBooks();
+    }
+
+    public LiveData<List<Book>> getBooks() {
+        return bookList;
+    }
+
+    public LiveData<List<Book>> getFavorites() {
+        return favoriteList;
+    }
+
+    public void addFavorite(Book book) {
+        repository.addToFavorites(book);
+    }
+
+    public void removeFavorite(Book book) {
+        repository.removeFromFavorites(book);
+    }
+}
+
+
+// 7th -- this is my  main activive listof book that is  MainActivity.java   or Book List
+public class MainActivity extends AppCompatActivity {
+    private BookViewModel viewModel;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
+        BookAdapter adapter = new BookAdapter(this::openDetails);
+        recyclerView.setAdapter(adapter);
+
+        viewModel = new ViewModelProvider(this).get(BookViewModel.class);
+        viewModel.getBooks().observe(this, adapter::submitList);
+    }
+
+    private void openDetails(Book book) {
+        Intent intent = new Intent(this, BookDetailActivity.class);
+        intent.putExtra("book", book); // make Book Parcelable
+        startActivity(intent);
+    }
+}
+
+
+//8th this is  my  BookDetailActivity.java Details & Favorite
+public class BookDetailActivity extends AppCompatActivity {
+    private BookViewModel viewModel;
+    private Book book;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_detail);
+
+        book = getIntent().getParcelableExtra("book");
+
+        TextView title = findViewById(R.id.title);
+        TextView desc = findViewById(R.id.description);
+        TextView rating = findViewById(R.id.rating);
+        Button favBtn = findViewById(R.id.favoriteBtn);
+
+        title.setText(book.getTitle());
+        desc.setText(book.getDescription());
+        rating.setText(String.valueOf(book.getRating()));
+
+        viewModel = new ViewModelProvider(this).get(BookViewModel.class);
+
+        favBtn.setOnClickListener(v -> {
+            viewModel.addFavorite(book);
+            Toast.makeText(this, "Saved to favorites!", Toast.LENGTH_SHORT).show();
+        });
+    }
+}
+
+
+
+
+
+
+
