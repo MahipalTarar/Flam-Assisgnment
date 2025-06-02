@@ -1,0 +1,100 @@
+// this is my solution for question no 2
+
+#include <iostream>
+using namespace std;
+
+// make  a pair of node that is Represents each entry in our custom hash map
+struct PairNode {
+    int myKey;
+    int myValue;
+    PairNode* nextNode;
+
+    // this is my Constructor to initialize a new key-value pair
+    PairNode(int k, int v) {
+        myKey = k;
+        myValue = v;
+        nextNode = nullptr;
+    }
+};
+
+class MyHashMap {
+private:
+    // Total number of slots for chosen to be a prime number to reduce collisions
+    static const int BUCKET_COUNT = 10007;
+    
+    // Array of pointers to linked lists such that each slot may hold multiple values
+    PairNode* hashTable[BUCKET_COUNT];
+
+    // Simple  logic to find the idx for a keyvalue
+    int getIndex(int key) {
+        return key % BUCKET_COUNT;
+    }
+
+public:
+    // Constructor:thst is required for  Initializes the hash table with empty (null) buckets
+    MyHashMap() {
+        for (int i = 0; i < BUCKET_COUNT; ++i) {
+            hashTable[i] = nullptr;
+        }
+    }
+
+    // PUT:method  Add a key-value pair or update that is already present  one 
+    void put(int key, int value) {
+        int index = getIndex(key);
+        PairNode* current = hashTable[index];
+
+        // Traverse complete linearly to find if key already exists
+        while (current != nullptr) {
+            if (current->myKey == key) {
+                current->myValue = value; // Update value
+                return;
+            }
+            current = current->nextNode;
+        }
+
+        // if key is not present and  key is new, insert it at the front of the linked list
+        PairNode* newEntry = new PairNode(key, value);
+        newEntry->nextNode = hashTable[index];
+        hashTable[index] = newEntry;
+    }
+
+    // GET: Retrieve the value associated with the key
+    int get(int key) {
+        int index = getIndex(key);
+        PairNode* current = hashTable[index];
+
+        // Look for the key in the bucket
+        while (current != nullptr) {
+            if (current->myKey == key)
+                return current->myValue;
+            current = current->nextNode;
+        }
+
+        // Key doesn't exist
+        return -1;
+    }
+
+    // REMOVE: Delete a key-value pair from the map
+    void remove(int key) {
+        int index = getIndex(key);
+        PairNode* current = hashTable[index];
+        PairNode* previous = nullptr;
+
+        // Search for the key in the bucket's linked list
+        while (current != nullptr) {
+            if (current->myKey == key) {
+                if (previous == nullptr) {
+                    // Key is at head
+                    hashTable[index] = current->nextNode;
+                } else {
+                    // Bypass the node
+                    previous->nextNode = current->nextNode;
+                }
+                delete current; // Free memory
+                return;
+            }
+            previous = current;
+            current = current->nextNode;
+        }
+    }
+};
